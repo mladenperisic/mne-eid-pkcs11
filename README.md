@@ -58,7 +58,11 @@ If your system’s security settings prevent downloaded `.dylib` files from exec
 
 ## Compilation
 
-On Linux, ensure that the [PCSC Lite](https://pcsclite.apdu.fr/) (development) library (`libpcsclite.so`) is installed on your system. Most Linux package managers provide this package. Also install `ccid` driver, and enable `pcscd` service.
+On Linux, ensure that the [PCSC Lite](https://pcsclite.apdu.fr/) (development) library (`libpcsclite.so`) is installed on your system. Most Linux package managers provide this package. Also install `ccid` driver, and enable `pcscd` service. [Zig version 0.15.2](https://ziglang.org/download/) should be installed too. Versions 0.16.0 and 0.17.0 will produce build errors and the building process will fail. To check which version of Zig's is installed:
+
+```
+zig version
+```
 
 On Windows and macOS, PC/SC libraries should already be installed, and the service enabled by default.
 
@@ -66,6 +70,10 @@ Build the project with:
 
 ```
 zig build
+```
+or, if you have multiple versions of Zig installed:
+```
+zig-0.15 build
 ```
 
 ## Warranty Disclaimer
