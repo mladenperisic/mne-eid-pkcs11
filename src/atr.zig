@@ -25,8 +25,14 @@ const GEMALTO_ATR_4 = [_]u8{
     0x32, 0x56, 0x30, 0x0D, 0x0A, 0x6C,
 };
 
+const MNE_EID_ATR = [_]u8{
+    0x3B, 0xDC, 0x96, 0xFF, 0x81, 0x91, 0xFE, 0x1F,
+    0xC3, 0x80, 0x73, 0xC8, 0x21, 0x13, 0x66, 0x05,
+    0x03, 0x63, 0x51, 0x00, 0x02, 0xDE,
+};
+
 pub fn validATR(atr: []const u8) bool {
-    const gemalto_atrs = [4][]const u8{ &GEMALTO_ATR_1, &GEMALTO_ATR_2, &GEMALTO_ATR_3, &GEMALTO_ATR_4 };
+    const gemalto_atrs = [5][]const u8{ &GEMALTO_ATR_1, &GEMALTO_ATR_2, &GEMALTO_ATR_3, &GEMALTO_ATR_4, &MNE_EID_ATR };
 
     for (gemalto_atrs) |gemalto_atr| {
         if (std.mem.eql(u8, gemalto_atr, atr))
