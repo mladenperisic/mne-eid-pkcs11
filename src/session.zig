@@ -124,9 +124,13 @@ pub const Session = struct {
             return PkcsError.HostMemory;
         errdefer object_list.deinit(allocator);
 
+//        const files: [2][2]u8 = [2][2]u8{
+//            [_]u8{ 0x71, 0x02 },
+//            [_]u8{ 0x71, 0x03 },
+//        };
         const files: [2][2]u8 = [2][2]u8{
-            [_]u8{ 0x71, 0x02 },
-            [_]u8{ 0x71, 0x03 },
+            [_]u8{ 0x00, 0x1C },
+            [_]u8{ 0x00, 0x1D },
         };
 
         // TODO determine handles of objects when only the auth cert is present on token
@@ -141,12 +145,15 @@ pub const Session = struct {
                 continue;
             defer allocator.free(certificate_file);
 
-            const certificate_data = try certificate.decompressCertificate(allocator, certificate_file);
-            defer allocator.free(certificate_data);
-
+//            const certificate_data = try certificate.decompressCertificate(allocator, certificate_file);
+//            defer allocator.free(certificate_data);
+//
+//            var cert_objects = certificate.loadObjects(
+//                allocator,
+//                certificate_data,
             var cert_objects = certificate.loadObjects(
                 allocator,
-                certificate_data,
+                certificate_file,
                 ids[i].certificate_handle,
                 ids[i].private_key_handle,
                 ids[i].public_key_handle,
