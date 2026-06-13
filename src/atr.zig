@@ -57,6 +57,7 @@ test "valid ATR" {
         .{ .pin = &GEMALTO_ATR_2, .expected = true },
         .{ .pin = &GEMALTO_ATR_3, .expected = true },
         .{ .pin = &GEMALTO_ATR_4, .expected = true },
+        .{ .pin = &MNE_EID_ATR, .expected = true },
     };
 
     for (test_cases) |tc| {
