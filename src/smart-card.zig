@@ -94,28 +94,73 @@ pub const Card = struct {
         return result;
     }
 
+    //    pub fn readCertificateFile(
+    //        self: *Card,
+    //        allocator: std.mem.Allocator,
+    //        file_name: []const u8,
+    //    ) PkcsError![]u8 {
+    //        try self.selectFile(allocator, file_name, 0x00, 0x00, 0);
+    //
+    //        const head_data = try self.read(allocator, 0, 2);
+    //        defer allocator.free(head_data);
+    //
+    //        if (head_data.len < 2)
+    //            return PkcsError.DeviceError;
+    //
+    //        var offset: u16 = 0;
+    //        var length: u16 = std.mem.readInt(u16, @ptrCast(head_data), std.builtin.Endian.little) + 2;
+    //
+    //        var list = std.ArrayList(u8).initCapacity(allocator, length) catch
+    //            return PkcsError.HostMemory;
+    //        defer list.deinit(allocator);
+    //
+    //        while (length > 0) {
+    //            const data = try self.read(allocator, offset, length);
+    //            defer allocator.free(data);
+    //            defer std.crypto.secureZero(u8, data);
+    //
+    //            if (data.len == 0)
+    //                break;
+    //
+    //            list.appendSlice(allocator, data) catch
+    //                return PkcsError.HostMemory;
+    //
+    //            offset += @intCast(data.len);
+    //            length -= @intCast(data.len);
+    //        }
+    //
+    //        const slice = list.toOwnedSlice(allocator) catch
+    //            return PkcsError.HostMemory;
+    //
+    //        return slice;
+    //    }
+
     pub fn readCertificateFile(
         self: *Card,
         allocator: std.mem.Allocator,
         file_name: []const u8,
     ) PkcsError![]u8 {
-        try self.selectFile(allocator, file_name, 0x00, 0x00, 0);
+        try self.selectFile(allocator, file_name, 0x02, 0x04, 0);
 
-        const head_data = try self.read(allocator, 0, 2);
+        // Read first 4 bytes to get DER length
+        const head_data = try self.read(allocator, 0, 4);
         defer allocator.free(head_data);
 
-        if (head_data.len < 2)
+        if (head_data.len < 4)
             return PkcsError.DeviceError;
 
-        var offset: u16 = 0;
-        var length: u16 = std.mem.readInt(u16, @ptrCast(head_data), std.builtin.Endian.little) + 2;
+        // DER format: 30 82 HH LL -> total length = 0xHHLL + 4
+        const cert_length: u16 = (@as(u16, head_data[2]) << 8 | head_data[3]) + 4;
 
-        var list = std.ArrayList(u8).initCapacity(allocator, length) catch
+        var offset: u16 = 0;
+        var remaining: u16 = cert_length;
+
+        var list = std.ArrayList(u8).initCapacity(allocator, cert_length) catch
             return PkcsError.HostMemory;
         defer list.deinit(allocator);
 
-        while (length > 0) {
-            const data = try self.read(allocator, offset, length);
+        while (remaining > 0) {
+            const data = try self.read(allocator, offset, remaining);
             defer allocator.free(data);
             defer std.crypto.secureZero(u8, data);
 
@@ -126,14 +171,28 @@ pub const Card = struct {
                 return PkcsError.HostMemory;
 
             offset += @intCast(data.len);
-            length -= @intCast(data.len);
+            remaining -= @intCast(data.len);
         }
 
-        const slice = list.toOwnedSlice(allocator) catch
+        return list.toOwnedSlice(allocator) catch
             return PkcsError.HostMemory;
-
-        return slice;
     }
+
+    //    pub fn readTokenInfo(
+    //        self: *Card,
+    //        allocator: std.mem.Allocator,
+    //    ) PkcsError!CardsTokenInfo {
+    //        try initCrypto(self, allocator);
+    //
+    //        const file_name = [_]u8{ 0x70, 0xf3 };
+    //        try self.selectFile(allocator, &file_name, 0, 0, 0);
+    //
+    //        const data = try self.read(allocator, 0, 52);
+    //        defer allocator.free(data);
+    //        defer std.crypto.secureZero(u8, data);
+    //
+    //        return parseTokenInfo(data);
+    //    }
 
     pub fn readTokenInfo(
         self: *Card,
@@ -141,14 +200,12 @@ pub const Card = struct {
     ) PkcsError!CardsTokenInfo {
         try initCrypto(self, allocator);
 
-        const file_name = [_]u8{ 0x70, 0xf3 };
-        try self.selectFile(allocator, &file_name, 0, 0, 0);
-
-        const data = try self.read(allocator, 0, 52);
-        defer allocator.free(data);
-        defer std.crypto.secureZero(u8, data);
-
-        return parseTokenInfo(data);
+        // Montenegro card does not have a 70F3 token info file
+        // Return static token info
+        var info = CardsTokenInfo{};
+        const label = "Montenegro eID";
+        @memcpy(info.token_label[0..label.len], label);
+        return info;
     }
 
     pub fn disconnect(
@@ -158,12 +215,21 @@ pub const Card = struct {
             return pkcs_error.formPCSC(err);
     }
 
+    //    pub fn initCrypto(
+    //        self: *const Card,
+    //        allocator: std.mem.Allocator,
+    //    ) PkcsError!void {
+    //        const file_name = [_]u8{ 0xA0, 0x00, 0x00, 0x00, 0x63, 0x50, 0x4B, 0x43, 0x53, 0x2D, 0x31, 0x35 };
+    //        const file_name = [_]u8{ 0x4D, 0x4F, 0x4E, 0x54, 0x45, 0x4E, 0x45, 0x47, 0x52, 0x4F };
+    //        try self.selectFile(allocator, &file_name, 0x04, 0x00, 0);
+    //    }
+
     pub fn initCrypto(
         self: *const Card,
         allocator: std.mem.Allocator,
     ) PkcsError!void {
-        const file_name = [_]u8{ 0xA0, 0x00, 0x00, 0x00, 0x63, 0x50, 0x4B, 0x43, 0x53, 0x2D, 0x31, 0x35 };
-        try self.selectFile(allocator, &file_name, 0x04, 0x00, 0);
+        const file_name = [_]u8{ 0xE8, 0x28, 0xBD, 0x08, 0x0F, 0xD2, 0x50, 0x47, 0x65, 0x6E, 0x65, 0x72, 0x69, 0x63 };
+        try self.selectFile(allocator, &file_name, 0x04, 0x0C, 0);
     }
 
     pub fn readRandom(
@@ -193,7 +259,8 @@ pub const Card = struct {
         var padded_pin = try padPin(pin);
         defer std.crypto.secureZero(u8, &padded_pin);
 
-        const data_unit = apdu.build(allocator, 0x00, 0x20, 0x00, 0x80, &padded_pin, 0) catch
+        //        const data_unit = apdu.build(allocator, 0x00, 0x20, 0x00, 0x80, &padded_pin, 0) catch
+        const data_unit = apdu.build(allocator, 0x00, 0x20, 0x00, 0x01, pin, 0) catch
             return PkcsError.HostMemory;
         defer allocator.free(data_unit);
         defer std.crypto.secureZero(u8, data_unit);
@@ -251,6 +318,58 @@ pub const Card = struct {
             return PkcsError.FunctionFailed;
     }
 
+    // pub fn sign(
+    //     self: *const Card,
+    //     allocator: std.mem.Allocator,
+    //     key_id: u8,
+    //     plain_sign: bool,
+    //     sign_request: []u8,
+    // ) PkcsError![]u8 {
+    //     const algorithm_id: u8 = if (plain_sign) 0 else 2;
+
+    //      const body = [_]u8{ 0x80, 0x01, algorithm_id, 0x84, 0x02, 0x60, key_id };
+
+    //      const select_key_data_unit = apdu.build(allocator, 0, 0x22, 0x41, 0xb6, body[0..body.len], 0) catch
+    //          return PkcsError.HostMemory;
+    //      defer allocator.free(select_key_data_unit);
+
+    //      const select_key_response = try self.transmit(allocator, select_key_data_unit);
+    //      defer allocator.free(select_key_response);
+
+    //      if (!responseOK(select_key_response))
+    //          return PkcsError.GeneralError;
+
+    //      var p2: u8 = 0x00;
+    //      var sign_request_body = sign_request;
+
+    //      if (plain_sign) {
+    //          p2 = sign_request[0];
+    //          sign_request_body = sign_request[1..];
+    //      }
+
+    //      const sign_request_data_unit = apdu.build(allocator, 0, 0x2a, 0x9e, p2, sign_request_body, 0x100) catch
+    //          return PkcsError.HostMemory;
+    //      defer allocator.free(sign_request_data_unit);
+    //      defer std.crypto.secureZero(u8, sign_request_data_unit);
+
+    //      const sign_request_response = try self.transmit(allocator, sign_request_data_unit);
+    //      defer allocator.free(sign_request_response);
+    //      defer std.crypto.secureZero(u8, sign_request_response);
+
+    //      if (!responseOK(sign_request_response))
+    //          return PkcsError.GeneralError;
+
+    //      if (sign_request_response.len <= 2)
+    //          return PkcsError.GeneralError;
+
+    //      const signature = allocator.alloc(u8, sign_request_response.len - 2) catch
+    //          return PkcsError.HostMemory;
+
+    //      @memcpy(signature, sign_request_response[0 .. sign_request_response.len - 2]);
+
+    //      return signature;
+    //  }
+
     pub fn sign(
         self: *const Card,
         allocator: std.mem.Allocator,
@@ -258,47 +377,47 @@ pub const Card = struct {
         plain_sign: bool,
         sign_request: []u8,
     ) PkcsError![]u8 {
-        const algorithm_id: u8 = if (plain_sign) 0 else 2;
+        _ = plain_sign;
 
-        const body = [_]u8{ 0x80, 0x01, algorithm_id, 0x84, 0x02, 0x60, key_id };
+        // Select ECC-eID application
+        const ecc_eid_aid = [_]u8{ 0xE8, 0x28, 0xBD, 0x08, 0x0F, 0xD2, 0x50, 0x45, 0x43, 0x43, 0x2D, 0x65, 0x49, 0x44 };
+        try self.selectFile(allocator, &ecc_eid_aid, 0x04, 0x0C, 0);
 
-        const select_key_data_unit = apdu.build(allocator, 0, 0x22, 0x41, 0xb6, body[0..body.len], 0) catch
+        // Select key DF
+        const key_df = [_]u8{ 0xDF, key_id };
+        try self.selectFile(allocator, &key_df, 0x01, 0x04, 0);
+
+        // MANAGE SE: set up signing key
+        const manage_se_body = [_]u8{ 0x80, 0x01, 0x8C, 0x84, 0x01, 0x81 };
+        const manage_se = apdu.build(allocator, 0x00, 0x22, 0x41, 0xB8, &manage_se_body, 0) catch
             return PkcsError.HostMemory;
-        defer allocator.free(select_key_data_unit);
+        defer allocator.free(manage_se);
 
-        const select_key_response = try self.transmit(allocator, select_key_data_unit);
-        defer allocator.free(select_key_response);
+        const manage_se_response = try self.transmit(allocator, manage_se);
+        defer allocator.free(manage_se_response);
 
-        if (!responseOK(select_key_response))
+        if (!responseOK(manage_se_response))
             return PkcsError.GeneralError;
 
-        var p2: u8 = 0x00;
-        var sign_request_body = sign_request;
-
-        if (plain_sign) {
-            p2 = sign_request[0];
-            sign_request_body = sign_request[1..];
-        }
-
-        const sign_request_data_unit = apdu.build(allocator, 0, 0x2a, 0x9e, p2, sign_request_body, 0x100) catch
+        // SIGN
+        const sign_request_data_unit = apdu.build(allocator, 0x00, 0x2A, 0x80, 0x86, sign_request, 0x100) catch
             return PkcsError.HostMemory;
         defer allocator.free(sign_request_data_unit);
         defer std.crypto.secureZero(u8, sign_request_data_unit);
 
-        const sign_request_response = try self.transmit(allocator, sign_request_data_unit);
-        defer allocator.free(sign_request_response);
-        defer std.crypto.secureZero(u8, sign_request_response);
+        const sign_response = try self.transmit(allocator, sign_request_data_unit);
+        defer allocator.free(sign_response);
 
-        if (!responseOK(sign_request_response))
+        if (!responseOK(sign_response))
             return PkcsError.GeneralError;
 
-        if (sign_request_response.len <= 2)
+        if (sign_response.len <= 2)
             return PkcsError.GeneralError;
 
-        const signature = allocator.alloc(u8, sign_request_response.len - 2) catch
+        const signature = allocator.alloc(u8, sign_response.len - 2) catch
             return PkcsError.HostMemory;
 
-        @memcpy(signature, sign_request_response[0 .. sign_request_response.len - 2]);
+        @memcpy(signature, sign_response[0 .. sign_response.len - 2]);
 
         return signature;
     }
