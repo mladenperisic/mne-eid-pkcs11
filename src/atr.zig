@@ -1,41 +1,36 @@
 const std = @import("std");
 
-const GEMALTO_ATR_1 = [_]u8{
-    0x3B, 0xFF, 0x94, 0x00, 0x00, 0x81, 0x31, 0x80,
-    0x43, 0x80, 0x31, 0x80, 0x65, 0xB0, 0x85, 0x02,
-    0x01, 0xF3, 0x12, 0x0F, 0xFF, 0x82, 0x90, 0x00,
-    0x79,
-};
+// Montenegro eID card ATRs.
+//
+// Montenegro eID cards are built on the NetSeT / IAS-ECC platform. Different
+// production batches have slightly different ATRs (the interface byte and the
+// resulting TCK checksum vary), so each distinct card ATR is listed explicitly
+// here. New variants are added as they are reported, following the same
+// convention as the upstream project.
+//
+// To add a new card: run `opensc-tool --atr`, then append the 22-byte ATR
+// below and add it to the test cases.
 
-const GEMALTO_ATR_2 = [_]u8{
-    0x3B, 0xF9, 0x96, 0x00, 0x00, 0x80, 0x31, 0xFE,
-    0x45, 0x53, 0x43, 0x45, 0x37, 0x20, 0x47, 0x43,
-    0x4E, 0x33, 0x5E,
-};
-
-const GEMALTO_ATR_3 = [_]u8{
-    0x3B, 0x9E, 0x96, 0x80, 0x31, 0xFE, 0x45, 0x53,
-    0x43, 0x45, 0x20, 0x38, 0x2E, 0x30, 0x2D, 0x43,
-    0x31, 0x56, 0x30, 0x0D, 0x0A, 0x6F,
-};
-
-const GEMALTO_ATR_4 = [_]u8{
-    0x3B, 0x9E, 0x96, 0x80, 0x31, 0xFE, 0x45, 0x53,
-    0x43, 0x45, 0x20, 0x38, 0x2E, 0x30, 0x2D, 0x43,
-    0x32, 0x56, 0x30, 0x0D, 0x0A, 0x6C,
-};
-
-const MNE_EID_ATR = [_]u8{
+// Card variant 1 (e.g. production ~2024).
+const MNE_EID_ATR_1 = [_]u8{
     0x3B, 0xDC, 0x96, 0xFF, 0x81, 0x91, 0xFE, 0x1F,
     0xC3, 0x80, 0x73, 0xC8, 0x21, 0x13, 0x66, 0x05,
     0x03, 0x63, 0x51, 0x00, 0x02, 0xDE,
 };
 
-pub fn validATR(atr: []const u8) bool {
-    const gemalto_atrs = [5][]const u8{ &GEMALTO_ATR_1, &GEMALTO_ATR_2, &GEMALTO_ATR_3, &GEMALTO_ATR_4, &MNE_EID_ATR };
+// Card variant 2 (e.g. production ~2022). Differs from variant 1 only in the
+// interface byte (position 2) and the TCK checksum (final byte).
+const MNE_EID_ATR_2 = [_]u8{
+    0x3B, 0xDC, 0x18, 0xFF, 0x81, 0x91, 0xFE, 0x1F,
+    0xC3, 0x80, 0x73, 0xC8, 0x21, 0x13, 0x66, 0x05,
+    0x03, 0x63, 0x51, 0x00, 0x02, 0x50,
+};
 
-    for (gemalto_atrs) |gemalto_atr| {
-        if (std.mem.eql(u8, gemalto_atr, atr))
+pub fn validATR(atr: []const u8) bool {
+    const known_atrs = [_][]const u8{ &MNE_EID_ATR_1, &MNE_EID_ATR_2 };
+
+    for (known_atrs) |known| {
+        if (std.mem.eql(u8, known, atr))
             return true;
     }
 
@@ -44,23 +39,20 @@ pub fn validATR(atr: []const u8) bool {
 
 test "valid ATR" {
     const test_cases = [_]struct {
-        pin: []const u8,
+        atr: []const u8,
         expected: bool,
     }{
-        .{ .pin = &.{}, .expected = false },
-        .{ .pin = &.{1}, .expected = false },
-        .{ .pin = &.{ 0, 0 }, .expected = false },
-        .{ .pin = &.{ 1, 2, 3 }, .expected = false },
-        .{ .pin = &.{ 0x90, 0x00, 0x00 }, .expected = false },
-        .{ .pin = &.{ 0x00, 0x00, 0x00, 0x90, 0x10 }, .expected = false },
-        .{ .pin = &GEMALTO_ATR_1, .expected = true },
-        .{ .pin = &GEMALTO_ATR_2, .expected = true },
-        .{ .pin = &GEMALTO_ATR_3, .expected = true },
-        .{ .pin = &GEMALTO_ATR_4, .expected = true },
-        .{ .pin = &MNE_EID_ATR, .expected = true },
+        .{ .atr = &.{}, .expected = false },
+        .{ .atr = &.{1}, .expected = false },
+        .{ .atr = &.{ 0, 0 }, .expected = false },
+        .{ .atr = &.{ 1, 2, 3 }, .expected = false },
+        .{ .atr = &.{ 0x90, 0x00, 0x00 }, .expected = false },
+        .{ .atr = &.{ 0x00, 0x00, 0x00, 0x90, 0x10 }, .expected = false },
+        .{ .atr = &MNE_EID_ATR_1, .expected = true },
+        .{ .atr = &MNE_EID_ATR_2, .expected = true },
     };
 
     for (test_cases) |tc| {
-        try std.testing.expect(validATR(tc.pin) == tc.expected);
+        try std.testing.expect(validATR(tc.atr) == tc.expected);
     }
 }

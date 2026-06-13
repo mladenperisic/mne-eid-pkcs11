@@ -22,6 +22,8 @@ pub export fn C_SignInit(
     if (mechanism == null)
         return pkcs.CKR_ARGUMENTS_BAD;
 
+    std.debug.print("[SIGNINIT] mechanism = 0x{x}\n", .{mechanism.?.mechanism});
+
     current_session.assertNoOperation() catch |err|
         return pkcs_error.toRV(err);
 
@@ -110,15 +112,21 @@ pub export fn C_Sign(
     if (data == null)
         return pkcs.CKR_ARGUMENTS_BAD;
 
+    std.debug.print("[C_SIGN] data_len={d}\n", .{data_len});
     current_operation.update(current_session.allocator, data.?[0..data_len]) catch
         return pkcs.CKR_HOST_MEMORY;
 
-    const sign_request = current_operation.createSignRequest(current_session.allocator) catch |err|
+    const sign_request = current_operation.createSignRequest(current_session.allocator) catch |err| {
+        std.debug.print("[C_SIGN] createSignRequest FAILED: {}\n", .{err});
         return pkcs_error.toRV(err);
+    };
     defer current_session.allocator.free(sign_request);
+    std.debug.print("[C_SIGN] sign_request len={d}\n", .{sign_request.len});
 
-    const key_id = consts.getCardIdFormPrivateKey(current_operation.private_key) catch |err|
+    const key_id = consts.getCardIdFormPrivateKey(current_operation.private_key) catch |err| {
+        std.debug.print("[C_SIGN] getCardId FAILED: {}\n", .{err});
         return pkcs_error.toRV(err);
+    };
 
     const computed_signature = current_session.card.sign(
         current_session.allocator,

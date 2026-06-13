@@ -120,8 +120,8 @@ pub export fn C_GetTokenInfo(
     @memset(&token_info.?.model, 0x20);
     std.mem.copyForwards(u8, &token_info.?.model, "SSCD v1");
 
-    token_info.?.ulMinPinLen = 4;
-    token_info.?.ulMaxPinLen = 8;
+    token_info.?.ulMinPinLen = 12;
+    token_info.?.ulMaxPinLen = 26;
     token_info.?.flags = pkcs.CKF_TOKEN_INITIALIZED | pkcs.CKF_USER_PIN_INITIALIZED | pkcs.CKF_LOGIN_REQUIRED | pkcs.CKF_RNG;
     token_info.?.ulMaxSessionCount = pkcs.CK_EFFECTIVELY_INFINITE;
     token_info.?.ulMaxRwSessionCount = pkcs.CK_EFFECTIVELY_INFINITE;

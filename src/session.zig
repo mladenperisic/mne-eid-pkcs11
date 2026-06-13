@@ -17,6 +17,8 @@ var next_session_id: pkcs.CK_SESSION_HANDLE = 1;
 
 var sessions: std.AutoHashMap(pkcs.CK_SESSION_HANDLE, Session) = undefined;
 
+var connected_cards: std.AutoHashMap(pkcs.CK_SLOT_ID, smart_card.Card) = undefined;
+
 var lock = std.Thread.RwLock{};
 
 pub const Session = struct {
@@ -124,10 +126,10 @@ pub const Session = struct {
             return PkcsError.HostMemory;
         errdefer object_list.deinit(allocator);
 
-//        const files: [2][2]u8 = [2][2]u8{
-//            [_]u8{ 0x71, 0x02 },
-//            [_]u8{ 0x71, 0x03 },
-//        };
+        //        const files: [2][2]u8 = [2][2]u8{
+        //            [_]u8{ 0x71, 0x02 },
+        //            [_]u8{ 0x71, 0x03 },
+        //        };
         const files: [2][2]u8 = [2][2]u8{
             [_]u8{ 0x00, 0x1C },
             [_]u8{ 0x00, 0x1D },
@@ -145,12 +147,12 @@ pub const Session = struct {
                 continue;
             defer allocator.free(certificate_file);
 
-//            const certificate_data = try certificate.decompressCertificate(allocator, certificate_file);
-//            defer allocator.free(certificate_data);
-//
-//            var cert_objects = certificate.loadObjects(
-//                allocator,
-//                certificate_data,
+            //            const certificate_data = try certificate.decompressCertificate(allocator, certificate_file);
+            //            defer allocator.free(certificate_data);
+            //
+            //            var cert_objects = certificate.loadObjects(
+            //                allocator,
+            //                certificate_data,
             var cert_objects = certificate.loadObjects(
                 allocator,
                 certificate_file,
@@ -179,6 +181,7 @@ pub fn initSessions(allocator: std.mem.Allocator) PkcsError!void {
     defer lock.unlock();
 
     sessions = std.AutoHashMap(pkcs.CK_SLOT_ID, Session).init(allocator);
+    connected_cards = std.AutoHashMap(pkcs.CK_SLOT_ID, smart_card.Card).init(allocator);
 }
 
 pub fn newSession(
@@ -202,11 +205,20 @@ pub fn newSession(
     if (!reader_state.recognized)
         return PkcsError.TokenNotRecognized;
 
-    const card = try smart_card.connect(
-        allocator,
-        &state.smart_card_client,
-        reader_state.name,
-    );
+    // Share one card connection (and its PACE + PIN state) across all sessions
+    // for this slot. Connect + PACE only happen on the first session.
+    const card = if (connected_cards.get(slot_id)) |existing|
+        existing
+    else blk: {
+        const new_card = try smart_card.connect(
+            allocator,
+            &state.smart_card_client,
+            reader_state.name,
+        );
+        connected_cards.put(slot_id, new_card) catch
+            return PkcsError.HostMemory;
+        break :blk new_card;
+    };
 
     const objects: []object.Object = allocator.alloc(object.Object, 0) catch
         return PkcsError.HostMemory;
@@ -270,7 +282,8 @@ pub fn closeSession(allocator: std.mem.Allocator, session_handle: pkcs.CK_SESSIO
         o.deinit(allocator);
     }
 
-    current_session.card.disconnect() catch {};
+    // NOTE: card connection is shared across sessions for this slot,
+    // so we do NOT disconnect here. Teardown happens in closeAllSessions.
 
     if (!sessions.remove(session_handle))
         return PkcsError.GeneralError;
@@ -294,6 +307,14 @@ pub fn closeAllSessions(allocator: std.mem.Allocator, slot_id: pkcs.CK_SLOT_ID) 
             err = pkcs_error.toRV(e);
         };
     }
+
+    // All sessions for this slot are closed; tear down the shared card
+    // connection so the next session re-connects and re-runs PACE.
+    if (connected_cards.fetchRemove(slot_id)) |kv| {
+        var c = kv.value;
+        c.disconnect() catch {};
+    }
+
     return err;
 }
 

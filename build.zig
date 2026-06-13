@@ -46,8 +46,17 @@ pub fn build(b: *std.Build) void {
     const lib_test = b.addTest(.{ .root_module = mod });
     lib_test.step.dependOn(header_file_step);
 
+    // lib.addIncludePath(b.path("include"));
+    // lib_test.addIncludePath(b.path("include"));
+
+    // b.installArtifact(lib);
+    //
     lib.addIncludePath(b.path("include"));
     lib_test.addIncludePath(b.path("include"));
+
+    // OpenSSL (libcrypto) for PACE: EC, AES, CMAC, SHA-1
+    mod.link_libc = true;
+    mod.linkSystemLibrary("crypto", .{});
 
     b.installArtifact(lib);
 

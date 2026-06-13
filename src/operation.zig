@@ -319,11 +319,27 @@ fn createHashedSignRequest(hash: *hasher.Hasher, allocator: std.mem.Allocator) P
         return PkcsError.HostMemory;
     defer allocator.free(payload);
 
-    var request = allocator.alloc(u8, prefix.len + payload.len) catch
+    // Build the DigestInfo (prefix || hash)
+    const di_len = prefix.len + payload.len;
+
+    // PKCS#1 v1.5 type-1 pad the DigestInfo to the key size (256 bytes for RSA-2048):
+    //   00 01 FF..FF 00 <DigestInfo>
+    const key_size: usize = signature_size; // 256
+    if (di_len + 11 > key_size)
+        return PkcsError.DataLenRange;
+
+    var request = allocator.alloc(u8, key_size) catch
         return PkcsError.HostMemory;
 
-    @memcpy(request[0..prefix.len], prefix);
-    @memcpy(request[prefix.len..], payload);
+    for (request) |*b|
+        b.* = 0xff;
+
+    const data_start_index = key_size - di_len;
+    request[0] = 0x00;
+    request[1] = 0x01;
+    request[data_start_index - 1] = 0x00;
+    @memcpy(request[data_start_index .. data_start_index + prefix.len], prefix);
+    @memcpy(request[data_start_index + prefix.len .. key_size], payload);
 
     return request;
 }
