@@ -27,6 +27,8 @@ const c = @cImport({
     @cInclude("openssl/evp.h");
     @cInclude("openssl/cmac.h");
     @cInclude("openssl/sha.h");
+    @cInclude("openssl/x509.h");
+    @cInclude("openssl/rsa.h");
 });
 
 const PACE_OID = [_]u8{ 0x04, 0x00, 0x7F, 0x00, 0x07, 0x02, 0x02, 0x04, 0x02, 0x02 };
@@ -326,4 +328,43 @@ pub fn establishPACE(
     std.debug.print("[PACE] handshake SUCCESS\n", .{});
     std.crypto.secureZero(u8, &k_mac);
     std.crypto.secureZero(u8, &nonce_s);
+}
+
+
+/// Compute the PKCS#11 CKA_ID for a Montenegro eID certificate.
+/// Convention (confirmed against live cards): the ID is the certificate's
+/// Subject Key Identifier, which equals SHA-1 of the PKCS#1 RSAPublicKey DER
+/// (the SEQUENCE { modulus, publicExponent }, NOT the SubjectPublicKeyInfo).
+/// Writes 20 bytes into out. Returns error on parse failure.
+pub fn computeCertId(cert_der: []const u8, out: *[20]u8) PkcsError!void {
+    var p: [*c]const u8 = cert_der.ptr;
+    const x509 = c.d2i_X509(null, &p, @intCast(cert_der.len)) orelse
+        return PkcsError.GeneralError;
+    defer c.X509_free(x509);
+
+    const pkey = c.X509_get_pubkey(x509) orelse
+        return PkcsError.GeneralError;
+    defer c.EVP_PKEY_free(pkey);
+
+    const rsa = c.EVP_PKEY_get1_RSA(pkey) orelse
+        return PkcsError.GeneralError;
+    defer c.RSA_free(rsa);
+
+    // DER-encode as PKCS#1 RSAPublicKey (SEQUENCE { modulus, publicExponent }).
+    // First call with null measures the length; then we encode into our own
+    // buffer. This avoids OpenSSL allocating (and the OPENSSL_free macro, which
+    // Zig's C translator can't handle because it expands __FILE__).
+    const needed = c.i2d_RSAPublicKey(rsa, null);
+    if (needed <= 0 or needed > 1024)
+        return PkcsError.GeneralError;
+
+    var der_buf: [1024]u8 = undefined;
+    var der_ptr: [*c]u8 = &der_buf;
+    const der_len = c.i2d_RSAPublicKey(rsa, &der_ptr);
+    if (der_len <= 0)
+        return PkcsError.GeneralError;
+
+    var digest: [20]u8 = undefined;
+    _ = c.SHA1(&der_buf, @intCast(der_len), &digest);
+    @memcpy(out, &digest);
 }

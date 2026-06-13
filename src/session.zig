@@ -9,6 +9,7 @@ const pkcs = @import("pkcs.zig").pkcs;
 const pkcs_error = @import("pkcs_error.zig");
 const reader = @import("reader.zig");
 const smart_card = @import("smart-card.zig");
+const pace = @import("pace.zig");
 const state = @import("state.zig");
 
 const PkcsError = pkcs_error.PkcsError;
@@ -147,19 +148,21 @@ pub const Session = struct {
                 continue;
             defer allocator.free(certificate_file);
 
-            //            const certificate_data = try certificate.decompressCertificate(allocator, certificate_file);
-            //            defer allocator.free(certificate_data);
-            //
-            //            var cert_objects = certificate.loadObjects(
-            //                allocator,
-            //                certificate_data,
+            // CKA_ID = Subject Key Identifier = SHA-1 of the RSAPublicKey,
+            // computed per-card from the actual certificate (not hardcoded),
+            // so each card reports its own correct, unique object ID.
+            var cert_id: [20]u8 = undefined;
+            pace.computeCertId(certificate_file, &cert_id) catch {
+                cert_id = ids[i].id;
+            };
+
             var cert_objects = certificate.loadObjects(
                 allocator,
                 certificate_file,
                 ids[i].certificate_handle,
                 ids[i].private_key_handle,
                 ids[i].public_key_handle,
-                &ids[i].id,
+                &cert_id,
                 i == 0,
             ) catch
                 continue;
