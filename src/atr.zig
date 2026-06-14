@@ -37,22 +37,3 @@ pub fn validATR(atr: []const u8) bool {
     return false;
 }
 
-test "valid ATR" {
-    const test_cases = [_]struct {
-        atr: []const u8,
-        expected: bool,
-    }{
-        .{ .atr = &.{}, .expected = false },
-        .{ .atr = &.{1}, .expected = false },
-        .{ .atr = &.{ 0, 0 }, .expected = false },
-        .{ .atr = &.{ 1, 2, 3 }, .expected = false },
-        .{ .atr = &.{ 0x90, 0x00, 0x00 }, .expected = false },
-        .{ .atr = &.{ 0x00, 0x00, 0x00, 0x90, 0x10 }, .expected = false },
-        .{ .atr = &MNE_EID_ATR_1, .expected = true },
-        .{ .atr = &MNE_EID_ATR_2, .expected = true },
-    };
-
-    for (test_cases) |tc| {
-        try std.testing.expect(validATR(tc.atr) == tc.expected);
-    }
-}

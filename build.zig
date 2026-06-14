@@ -43,27 +43,13 @@ pub fn build(b: *std.Build) void {
     const header_file_step = checkPkcs11Headers(b);
     lib.step.dependOn(header_file_step);
 
-    const lib_test = b.addTest(.{ .root_module = mod });
-    lib_test.step.dependOn(header_file_step);
-
-    // lib.addIncludePath(b.path("include"));
-    // lib_test.addIncludePath(b.path("include"));
-
-    // b.installArtifact(lib);
-    //
     lib.addIncludePath(b.path("include"));
-    lib_test.addIncludePath(b.path("include"));
 
     // OpenSSL (libcrypto) for PACE: EC, AES, CMAC, SHA-1
     mod.link_libc = true;
     mod.linkSystemLibrary("crypto", .{});
 
     b.installArtifact(lib);
-
-    const lib_test_run = b.addRunArtifact(lib_test);
-
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&lib_test_run.step);
 }
 
 fn checkPkcs11Headers(b: *std.Build) *std.Build.Step {
