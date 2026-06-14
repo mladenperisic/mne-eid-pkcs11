@@ -277,27 +277,16 @@ pub export fn C_InitPIN(
 }
 
 pub export fn C_SetPIN(
-    session_handle: pkcs.CK_SESSION_HANDLE,
-    old_pin: pkcs.CK_UTF8CHAR_PTR,
-    old_pin_len: pkcs.CK_ULONG,
-    new_pin: pkcs.CK_UTF8CHAR_PTR,
-    new_pin_len: pkcs.CK_ULONG,
+    _: pkcs.CK_SESSION_HANDLE,
+    _: pkcs.CK_UTF8CHAR_PTR,
+    _: pkcs.CK_ULONG,
+    _: pkcs.CK_UTF8CHAR_PTR,
+    _: pkcs.CK_ULONG,
 ) pkcs.CK_RV {
-    state.lock.lockShared();
-    defer state.lock.unlockShared();
-
-    const current_session = session.getSession(session_handle, false) catch |err|
-        return pkcs_error.toRV(err);
-
-    if (!current_session.write_enabled)
-        return pkcs.CKR_SESSION_READ_ONLY;
-
-    if (old_pin == null or new_pin == null)
-        return pkcs.CKR_ARGUMENTS_BAD;
-
-    current_session.card.setPin(state.allocator, old_pin[0..old_pin_len], new_pin[0..new_pin_len]) catch |err|
-        return pkcs_error.toRV(err);
-    return pkcs.CKR_OK;
+    // PIN management (initialize, change and unblock) is intentionally out of scope of this project.
+    // Those operations should be done via the official Windows/MacOS middleware.
+    // This module only supports authentication and signing.
+    return pkcs.CKR_FUNCTION_NOT_SUPPORTED;
 }
 
 pub export fn C_WaitForSlotEvent(

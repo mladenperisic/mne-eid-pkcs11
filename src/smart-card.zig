@@ -242,45 +242,6 @@ pub const Card = struct {
             return PkcsError.PinIncorrect;
     }
 
-    pub fn setPin(
-        self: *const Card,
-        allocator: std.mem.Allocator,
-        old_pin: []const u8,
-        new_pin: []const u8,
-    ) PkcsError!void {
-        if (!validatePin(old_pin))
-            return PkcsError.PinIncorrect;
-
-        if (!validatePin(new_pin))
-            return PkcsError.PinIncorrect;
-
-        try self.verifyPin(allocator, old_pin);
-
-        var data: [16]u8 = [_]u8{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-        defer std.crypto.secureZero(u8, &data);
-
-        var padded_old_pin = try padPin(old_pin);
-        defer std.crypto.secureZero(u8, &padded_old_pin);
-
-        var padded_new_pin = try padPin(new_pin);
-        defer std.crypto.secureZero(u8, &padded_new_pin);
-
-        @memcpy(data[0..8], &padded_old_pin);
-        @memcpy(data[8..16], &padded_new_pin);
-
-        const data_unit = apdu.build(allocator, 0x00, 0x24, 0x00, 0x80, &data, 0) catch
-            return PkcsError.HostMemory;
-        defer allocator.free(data_unit);
-        defer std.crypto.secureZero(u8, data_unit);
-
-        const response = try self.transmit(allocator, data_unit);
-        defer allocator.free(response);
-        defer std.crypto.secureZero(u8, response);
-
-        if (!responseOK(response))
-            return PkcsError.FunctionFailed;
-    }
-
     pub fn sign(
         self: *const Card,
         allocator: std.mem.Allocator,
@@ -410,27 +371,5 @@ fn responseIs(rsp: []const u8, expected: [2]u8) bool {
 
 fn responseOK(rsp: []const u8) bool {
     return responseIs(rsp, [_]u8{ 0x90, 0x00 });
-}
-
-fn padPin(pin: []const u8) PkcsError![8]u8 {
-    var padded_pin: [8]u8 = [_]u8{ 0, 0, 0, 0, 0, 0, 0, 0 };
-
-    for (pin, 0..) |p, i| {
-        padded_pin[i] = p;
-    }
-
-    return padded_pin;
-}
-
-fn validatePin(pin: []const u8) bool {
-    if (pin.len < 4 or pin.len > 8)
-        return false;
-
-    for (pin) |p| {
-        if (p < '0' or p > '9')
-            return false;
-    }
-
-    return true;
 }
 
