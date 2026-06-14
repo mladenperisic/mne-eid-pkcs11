@@ -1,4 +1,6 @@
-# PKCS#11 module for Serbian ID
+# PKCS#11 module for Montenegrin eID smart cards
+
+Warning: Do not use with Serbian eID smart cards. This is a fork project and still very much in it's infancy, so this README is WIP.
 
 This is an open source [PKCS#11 v2.40](https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/pkcs11-base-v2.40.html) module (middleware) for Serbian ID smart cards. It is designed for smart cards produced by Gemalto and aims to support the functionality required for authenticating and signing in to official state portals (like [eUprava](https://euprava.gov.rs/) or [ePorezi](https://eporezi.purs.gov.rs/user/login.html)).
 
